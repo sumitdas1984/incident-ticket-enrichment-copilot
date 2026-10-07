@@ -38,7 +38,7 @@ def get_calculation_service(
     calc_repo: Annotated[CalculationRepository, Depends(get_calculation_repository)],
     alarm_service: Annotated[AlarmService, Depends(get_alarm_service)],
 ) -> CalculationService:
-    """FastAPI dependency that wires the calculation service with repo + alarm service."""
+    """FastAPI dependency that wires the calculation service with its repo + AlarmService."""
     return CalculationService(calc_repo=calc_repo, alarm_service=alarm_service)
 
 
