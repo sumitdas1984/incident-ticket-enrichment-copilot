@@ -3,17 +3,37 @@
 
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import FastAPI, HTTPException, Path, Query, status
 
-from alarm_api.data import search_assets
-from alarm_api.models import AssetSearchResponse
+from alarm_api.data import get_asset_by_id, search_assets
+from alarm_api.models import Asset, AssetSearchResponse
 
 app = FastAPI(title="Alarm Management API Simulator")
 
 
-@app.get("/")
-def read_root() -> dict[str, str]:
-    return {"message": "Welcome to the Alarm Management API Simulator"}
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/assets/{asset_id}/metadata", response_model=Asset)
+def get_asset_metadata(
+    asset_id: Annotated[
+        str,
+        Path(
+            min_length=1,
+            description="Asset identifier (e.g. 'P-101'). Case-sensitive.",
+        ),
+    ],
+) -> Asset:
+    """Return the full asset record for the given asset_id, or 404 if unknown."""
+    asset = get_asset_by_id(asset_id)
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"asset {asset_id!r} not found",
+        )
+    return asset
 
 
 @app.get("/assets/search", response_model=AssetSearchResponse)

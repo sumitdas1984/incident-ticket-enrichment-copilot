@@ -112,3 +112,14 @@ def search_assets(query: str, limit: int = 10, unit: str | None = None) -> list[
         if len(results) >= limit:
             break
     return results
+
+
+_ASSETS_BY_ID: dict[str, Asset] = {asset.asset_id: asset for asset in ASSETS}
+
+
+def get_asset_by_id(asset_id: str) -> Asset | None:
+    """Return the asset with the given `asset_id`, or None if no match.
+
+    Match is case-sensitive — `asset_id` is treated as a stable identifier.
+    """
+    return _ASSETS_BY_ID.get(asset_id)
