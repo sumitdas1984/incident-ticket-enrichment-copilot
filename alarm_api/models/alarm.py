@@ -1,41 +1,11 @@
-# models.py — API data structures
-# This defines what our API data looks like using Pydantic.
+# models/alarm.py — Alarm models, list responses, and analytics request/response models
 
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
-class Asset(BaseModel):
-    """An industrial asset registered in the alarm management system."""
-
-    asset_id: str = Field(..., description="Stable, plant-wide unique identifier for the asset.")
-    name: str = Field(
-        ...,
-        description="Human-readable asset name. Searched as a case-insensitive substring.",
-    )
-    unit: str | None = Field(
-        default=None,
-        description="Process unit the asset belongs to (e.g. 'Unit 5').",
-    )
-    site: str | None = Field(
-        default=None,
-        description="Plant or site the asset belongs to (e.g. 'SouthPlant').",
-    )
-    asset_type: str | None = Field(
-        default=None,
-        description="Equipment class (e.g. 'pump', 'compressor', 'motor', 'heat_exchanger', 'cooling_tower').",
-    )
-
-
-class AssetSearchResponse(BaseModel):
-    """Response envelope for GET /assets/search. The contract is {results: [Asset, ...]}."""
-
-    results: list[Asset] = Field(
-        ...,
-        description="Matching assets in deterministic seed order, capped by `limit`.",
-    )
+from alarm_api.models.common import TimeRange
 
 
 class Alarm(BaseModel):
@@ -100,13 +70,6 @@ class AlarmListResponse(BaseModel):
 
 
 # ----- Phase 4: analytics request/response models -----
-
-
-class TimeRange(BaseModel):
-    """Inclusive time window used by analytics endpoints."""
-
-    start_time: datetime = Field(..., description="Window start (inclusive).")
-    end_time: datetime = Field(..., description="Window end (inclusive).")
 
 
 class AlarmSummaryRequest(BaseModel):
@@ -232,110 +195,3 @@ class PriorityScoreResponse(BaseModel):
         ...,
         description="Component contributions that produced the score.",
     )
-
-
-# ----- Phase 5: operator-action recommendations -----
-
-
-class OperatorActionsRequest(BaseModel):
-    alarm_id: str = Field(..., min_length=1)
-    include_related: bool = Field(default=True, description="Include related alarms in the response.")
-    include_asset_context: bool = Field(default=True, description="Include asset context in the response.")
-    include_historical_pattern: bool = Field(
-        default=True,
-        description="Include historical pattern summary in the response.",
-    )
-
-
-class OperatorAction(BaseModel):
-    action_id: str = Field(..., description="Stable ID within this response (e.g. 'ACT-001').")
-    title: str
-    description: str
-    priority: Literal["low", "medium", "high", "critical"]
-    rationale: str
-    category: Literal["immediate_response", "investigation", "mitigation", "documentation"]
-
-
-class RelatedAlarm(BaseModel):
-    alarm_id: str
-    alarm_name: str
-    relationship: str = Field(..., description="Why this alarm is related (e.g. 'same_asset_within_60min').")
-    start_time: datetime
-
-
-class RecommendationAssetContext(BaseModel):
-    asset_id: str
-    name: str
-    unit: str | None
-    site: str | None
-    asset_type: str | None
-    active_alarm_count: int = Field(..., description="Count of `active` alarms currently on this asset.")
-
-
-class HistoricalPattern(BaseModel):
-    alarm_name: str
-    occurrence_count: int
-    last_occurrence: datetime | None
-    common_actions: list[str]
-
-
-class OperatorActionsResponse(BaseModel):
-    alarm_id: str
-    actions: list[OperatorAction]
-    related_alarms: list[RelatedAlarm] = Field(default_factory=list)
-    asset_context: RecommendationAssetContext | None = None
-    historical_pattern: HistoricalPattern | None = None
-
-
-# ----- Phase 6: calculation code & KPI definitions -----
-
-
-class GenerateCalculationRequest(BaseModel):
-    calculation_type: str = Field(
-        ...,
-        min_length=1,
-        description="Type of calculation to generate (e.g. 'alarm_flood_index', 'alarm_count').",
-    )
-    filters: dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "Filters persisted with the calculation and applied at execute time. "
-            "Recognised keys: unit, asset_ids (comma-separated), start_time, end_time."
-        ),
-    )
-
-
-class GenerateCalculationResponse(BaseModel):
-    calculation_id: str = Field(..., description="Unique ID used by /calculation-code/execute.")
-    calculation_type: str
-    filters: dict[str, str]
-    code: str = Field(..., description="Human-readable description of what the calculation does.")
-
-
-class ExecuteCalculationRequest(BaseModel):
-    calculation_id: str = Field(..., min_length=1)
-    filters: dict[str, str] = Field(
-        default_factory=dict,
-        description="Optional override filters merged on top of the stored filters.",
-    )
-
-
-class ExecuteCalculationResponse(BaseModel):
-    calculation_id: str
-    calculation_type: str
-    result: dict[str, float | int | str] = Field(
-        ...,
-        description="Computed metrics. Shape depends on the calculation_type.",
-    )
-
-
-class KpiDefinition(BaseModel):
-    kpi_id: str
-    name: str
-    description: str
-    unit: str | None = None
-    category: str
-
-
-class KpiDefinitionsResponse(BaseModel):
-    kpis: list[KpiDefinition]
