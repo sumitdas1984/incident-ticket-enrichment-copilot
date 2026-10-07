@@ -1,12 +1,17 @@
 # main.py — FastAPI application
 # This is the entry point.
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Path, Query, status
 
-from alarm_api.data import get_asset_by_id, search_assets
-from alarm_api.models import Asset, AssetSearchResponse
+from alarm_api.data import (
+    get_alarm_by_id,
+    get_asset_by_id,
+    query_alarms,
+    search_assets,
+)
+from alarm_api.models import Alarm, AlarmListResponse, Asset, AssetSearchResponse
 
 app = FastAPI(title="Alarm Management API Simulator")
 
@@ -78,6 +83,54 @@ def search_asset(
             unit=normalised_unit,
         )
     )
+
+
+@app.get("/alarms", response_model=AlarmListResponse)
+def list_alarms(
+    asset_id: Annotated[
+        str | None,
+        Query(description="Filter to alarms for this asset_id only."),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="1-indexed page number.")] = 1,
+    page_size: Annotated[
+        int,
+        Query(ge=1, le=100, description="Number of items per page (1-100, default 50)."),
+    ] = 50,
+    sort_by: Annotated[
+        Literal["start_time", "priority", "alarm_id"],
+        Query(description="Field to sort by. Severity is intentionally not sortable alphabetically."),
+    ] = "start_time",
+    sort_order: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Sort direction."),
+    ] = "desc",
+) -> AlarmListResponse:
+    """List alarms from the deterministic seed with basic filtering, sorting, and pagination."""
+    items, total = query_alarms(
+        asset_id=asset_id,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return AlarmListResponse(data=items, page=page, page_size=page_size, total=total)
+
+
+@app.get("/alarms/{alarm_id}", response_model=Alarm)
+def get_alarm(
+    alarm_id: Annotated[
+        str,
+        Path(min_length=1, description="Alarm identifier (e.g. 'ALM-0001'). Case-sensitive."),
+    ],
+) -> Alarm:
+    """Return a single alarm by ID, or 404 if unknown."""
+    alarm = get_alarm_by_id(alarm_id)
+    if alarm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"alarm {alarm_id!r} not found",
+        )
+    return alarm
 
 
 if __name__ == "__main__":
