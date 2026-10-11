@@ -4,9 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project shape
 
-A production-oriented enterprise AI Copilot that helps service engineers investigate industrial alarms and prepare incident tickets. The architecture has four planned runtime components — **Copilot backend** (FastAPI async), **MCP server**, **Alarm API simulator**, **chat frontend** — wired together via Docker Compose. The full architecture and end-to-end flow are described in `docs/01_project_overview.md`. The README has the Quickstart and configuration knobs (`ALARM_API_BASE_URL`, `ALARM_API_TOKEN`, `LLM_API_KEY`, `LLM_MODEL`, `RAG_INDEX_PATH`, `TICKETING_BACKEND`).
+A production-oriented enterprise AI Copilot that helps service engineers investigate industrial alarms and prepare incident tickets. The architecture has four planned runtime components — **Copilot backend** (FastAPI async), **MCP server**, **Alarm API Simulator service**, **chat frontend** — wired together via Docker Compose. The full architecture and end-to-end flow are described in `docs/01_project_overview.md`. The README has the Quickstart and configuration knobs (`ALARM_API_BASE_URL`, `ALARM_API_TOKEN`, `LLM_API_KEY`, `LLM_MODEL`, `RAG_INDEX_PATH`, `TICKETING_BACKEND`).
 
-Only the **Alarm API simulator** is implemented today. The other three components (`copilot/`, `mcp_server/`, `frontend/`) are placeholders declared in `pyproject.toml`'s `[tool.hatch.build.targets.wheel] packages = [...]` but do not yet exist on disk.
+**Implemented today:**
+
+- `alarm_api/` — the **Alarm API Simulator service**: a self-contained FastAPI app that implements the contract in `specs/alarm-api/`. Standalone process, not embedded in any other service.
+- `alarm_mcp/` — the **MCP server**: wraps the Alarm API Simulator as MCP tools. Talks to the simulator over HTTP, never imports it in-process. Uses [`fastmcp`](https://github.com/jlowin/fastmcp) (not `mcp[cli]`).
+
+**Not yet implemented:** `copilot/` (orchestration brain), `frontend/` (chat UI). These are placeholders in `pyproject.toml`'s `[tool.hatch.build.targets.wheel] packages = [...]`.
+
+For the canonical implementation status — what's shipping, what's pending, and a ranked list of follow-up work — see [`.claude/plans/current_status.md`](.claude/plans/current_status.md). Read it before planning new work; it's the source of truth for "is X done yet?" questions.
 
 ## The Alarm API contract
 
@@ -39,14 +46,38 @@ alarm_api/
 - `models/__init__.py` and `data/__init__.py` re-export everything so `from alarm_api.models import Asset` and `from alarm_api.data import ALARMS` keep working — keep that re-export surface when splitting or adding modules.
 - Routes must not import repositories directly. The analytics route is the one exception (`routes/analytics.py` calls `KpiRepository` directly), but the rest go through services.
 
+## `alarm_mcp/` MCP server layout
+
+```
+alarm_mcp/
+├── main.py                              # Server entry: `python -m alarm_mcp.main`
+├── tools/
+│   └── alarm_tools.py                   # @mcp.tool definitions — the LLM-facing surface
+└── clients/
+    └── alarm_api_client.py              # httpx.AsyncClient wrapper around the Alarm API Simulator
+```
+
+**Conventions to preserve:**
+
+- The MCP server **never imports `alarm_api/`** in-process. It talks to the simulator exclusively over HTTP. This keeps the two services independently deployable and makes the boundary explicit.
+- `clients/alarm_api_client.py` is a thin transport layer — one method per simulator endpoint, returning plain `dict`s (the MCP SDK serialises to JSON). Don't add business logic here.
+- `tools/alarm_tools.py` is the LLM-facing surface. Each tool's docstring is what the LLM sees, so write it as a contract: when to call, what to expect, what errors mean. Don't add HTTP details to tool docstrings.
+- `get_alarm_api_client()` returns a process-wide singleton. One `httpx.AsyncClient` per server, reused across tool calls for connection pooling.
+- Configuration via env: `ALARM_API_BASE_URL` (default `http://localhost:8000`) and `ALARM_API_TOKEN` (default `demo-token`). Don't hardcode.
+- `mcp.run_async()` (in `main.py`) and `close_alarm_api_client()` on shutdown close the underlying httpx client cleanly.
+
 ## Commands
 
 ```bash
 # Install deps (project uses uv; pyproject.toml is the manifest)
 uv sync --extra dev
 
-# Run the simulator
+# Run the Alarm API Simulator service
 uv run uvicorn alarm_api.main:app --reload --port 8000
+
+# Run the MCP server (talks to the simulator over HTTP)
+ALARM_API_BASE_URL=http://localhost:8000 ALARM_API_TOKEN=demo-token \
+    uv run python -m alarm_mcp.main
 
 # Tests (note: no tests/ directory exists yet — pytest reports 0 collected)
 uv run pytest
@@ -69,7 +100,7 @@ uv run mypy alarm_api
 - **Auth not enforced.** No `Depends(verify_token)` anywhere — every endpoint is reachable anonymously. `Authorization: Bearer ...` is in the Postman collection but the simulator ignores it.
 - **Correlation id not echoed.** No middleware that reads `X-Correlation-Id` and reflects it on the response.
 - **Error envelope mismatch.** FastAPI's default 422 returns `{detail: [...]}`, not the spec's `{error: {code, message, correlation_id}}`. No `app.exception_handler(RequestValidationError)` is registered.
-- **`pyproject.toml` wheel packages mismatch.** `packages = ["copilot", "mcp_server", "simulator", "frontend"]` but only `alarm_api/` exists on disk. `uvicorn alarm_api.main:app` works via filesystem layout, not the wheel declaration.
+- **`pyproject.toml` wheel packages still partially stale.** `packages = ["alarm_api", "alarm_mcp", "copilot", "mcp_server", "simulator", "frontend"]` — `alarm_api` and `alarm_mcp` exist on disk; `copilot`, `mcp_server`, `simulator`, `frontend` are placeholders for future work.
 - **No `tests/` directory.** `testpaths = ["tests"]` is set but nothing exists there. When adding them, follow the layered naming: `tests/test_alarm_api.py` or per-module `tests/test_services_alarm.py`.
 
 ## Spec change protocol

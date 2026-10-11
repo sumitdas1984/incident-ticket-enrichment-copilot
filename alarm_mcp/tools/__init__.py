@@ -1,0 +1,1 @@
+# alarm_mcp/tools/__init__.py — MCP tool definitions exposed by this server.

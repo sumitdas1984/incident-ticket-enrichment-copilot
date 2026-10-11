@@ -1,0 +1,1 @@
+# alarm_mcp/clients/__init__.py — HTTP clients that wrap the Alarm API Simulator service.
