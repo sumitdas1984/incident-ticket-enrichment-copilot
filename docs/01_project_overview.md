@@ -185,12 +185,16 @@ The MCP server is responsible for:
 
 ## 5.5 MCP Client
 
-The Copilot communicates with enterprise systems through an MCP Client.
+The Copilot communicates with enterprise systems through an MCP Client built
+on [LangChain MCP Adapters](https://github.com/langchain-ai/langchain-mcp-adapters)
+(`langchain-mcp-adapters`). The adapter layer lets LangChain agents load MCP
+tools as native tool objects and call them through the standard LangChain
+tool-calling interface, with no hand-rolled JSON-RPC plumbing.
 
 Responsibilities include:
 
-* Tool discovery
-* Tool selection
+* Tool discovery (via `MultiServerMCPClient.load_mcp_tools()`)
+* Tool selection (delegated to the LangChain agent)
 * Tool invocation
 * Multi-step orchestration
 * Passing outputs between tools
@@ -199,6 +203,11 @@ Responsibilities include:
 The Copilot does not call the Alarm API directly.
 
 All interactions pass through the MCP layer.
+
+The boundary is one-way: the Copilot depends on the MCP server (`alarm_mcp`)
+but never on the Alarm API Simulator directly. The MCP server, in turn,
+depends only on the simulator over HTTP. The Copilot can therefore be
+developed, tested, and deployed independently of either backend component.
 
 ---
 

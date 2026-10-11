@@ -64,7 +64,8 @@ in `docs/01_project_overview.md`, **two are implemented and runnable**,
 - `docs/01_project_overview.md` — full architecture doc
 - `specs/alarm-api/` — 3 Postman collections (source of truth for the contract)
 - `README.md` — quickstart + env-var config
-- `pyproject.toml` — `fastapi`, `pydantic`, `uvicorn`, `fastmcp`, `httpx` deps
+- `pyproject.toml` — `fastapi`, `pydantic`, `uvicorn`, `fastmcp` (server), `httpx` deps;
+  `langchain-mcp-adapters` is the planned client dep (lands with `copilot/`)
 - `uv.lock` — locked dep tree
 - `CLAUDE.md` — Claude Code instructions for the repo
 - `.claude/settings.local.json` — restricted bash perms (`git rm *`, `uv sync *`, `uv run *`)
@@ -76,8 +77,10 @@ in `docs/01_project_overview.md`, **two are implemented and runnable**,
 
 1. **`copilot/` — orchestration brain.** FastAPI async service that:
    - Receives natural-language requests from the frontend
-   - Plans the tool sequence
-   - Invokes `alarm_mcp` tools (and RAG tools once they exist)
+   - Plans the tool sequence via a LangChain agent
+   - Consumes `alarm_mcp` tools through the **LangChain MCP Adapters**
+     (`langchain-mcp-adapters`) — the client side, distinct from the
+     server which uses `fastmcp`
    - Combines results into a grounded response
    - Prepares a ticket draft for human approval before any write
    This is the heart of the project per the project-overview doc.

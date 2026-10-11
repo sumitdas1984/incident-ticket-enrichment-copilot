@@ -63,8 +63,8 @@ See [`docs/01_project_overview.md`](docs/01_project_overview.md) for the full sy
 | Layer | Technology |
 | --- | --- |
 | Copilot backend | Python, FastAPI, async I/O |
-| MCP server | Python MCP SDK |
-| MCP client | Python MCP SDK |
+| MCP server | [fastmcp](https://github.com/jlowin/fastmcp) |
+| MCP client | [LangChain MCP Adapters](https://github.com/langchain-ai/langchain-mcp-adapters) |
 | RAG pipeline | Embeddings + vector store |
 | Alarm API simulator | FastAPI |
 | Ticketing | Pluggable — Jira / ServiceNow / Azure DevOps / GitHub Issues / Mock |

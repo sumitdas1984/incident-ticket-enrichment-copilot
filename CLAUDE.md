@@ -9,9 +9,9 @@ A production-oriented enterprise AI Copilot that helps service engineers investi
 **Implemented today:**
 
 - `alarm_api/` — the **Alarm API Simulator service**: a self-contained FastAPI app that implements the contract in `specs/alarm-api/`. Standalone process, not embedded in any other service.
-- `alarm_mcp/` — the **MCP server**: wraps the Alarm API Simulator as MCP tools. Talks to the simulator over HTTP, never imports it in-process. Uses [`fastmcp`](https://github.com/jlowin/fastmcp) (not `mcp[cli]`).
+- `alarm_mcp/` — the **MCP server**: wraps the Alarm API Simulator as MCP tools. Talks to the simulator over HTTP, never imports it in-process. Built on [`fastmcp`](https://github.com/jlowin/fastmcp) 2.x (not the official `mcp[cli]`).
 
-**Not yet implemented:** `copilot/` (orchestration brain), `frontend/` (chat UI). These are placeholders in `pyproject.toml`'s `[tool.hatch.build.targets.wheel] packages = [...]`.
+**Not yet implemented:** `copilot/` (orchestration brain), `frontend/` (chat UI). The Copilot will consume MCP tools through [**LangChain MCP Adapters**](https://github.com/langchain-ai/langchain-mcp-adapters) (`langchain-mcp-adapters`) — the boundary is one-way: `copilot → alarm_mcp (MCP) → alarm_api (HTTP)`, never the other direction. Both placeholder names are still listed in `pyproject.toml`'s `[tool.hatch.build.targets.wheel] packages = [...]` for now.
 
 For the canonical implementation status — what's shipping, what's pending, and a ranked list of follow-up work — see [`.claude/plans/current_status.md`](.claude/plans/current_status.md). Read it before planning new work; it's the source of truth for "is X done yet?" questions.
 
@@ -65,12 +65,16 @@ alarm_mcp/
 - `get_alarm_api_client()` returns a process-wide singleton. One `httpx.AsyncClient` per server, reused across tool calls for connection pooling.
 - Configuration via env: `ALARM_API_BASE_URL` (default `http://localhost:8000`) and `ALARM_API_TOKEN` (default `demo-token`). Don't hardcode.
 - `mcp.run_async()` (in `main.py`) and `close_alarm_api_client()` on shutdown close the underlying httpx client cleanly.
+- **Default transport is stdio** (the FastMCP default). That's what the LangChain MCP Adapters client uses today — it spawns `python -m alarm_mcp.main` as a subprocess. If we later need the server reachable as a long-lived HTTP/SSE endpoint, switch `main.py` to `mcp.run_async(transport="streamable-http", host=..., port=...)` and update the LangChain client config to point at that URL instead of the stdio command. Don't add both transports speculatively.
 
 ## Commands
 
 ```bash
 # Install deps (project uses uv; pyproject.toml is the manifest)
 uv sync --extra dev
+
+# Planned but not yet pinned: langchain-mcp-adapters, langchain-core, an LLM
+# provider SDK, and a vector store client. These land when copilot/ is built.
 
 # Run the Alarm API Simulator service
 uv run uvicorn alarm_api.main:app --reload --port 8000
